@@ -52,7 +52,7 @@ R0_GRID = np.linspace(2.5, 7.0, 7)
 V_VALUES = [0.10, 0.20]
 
 
-def main(out_dir: Path) -> None:
+def main(out_dir: Path, fit_order: int = 3) -> None:
     out_dir.mkdir(parents=True, exist_ok=True)
     fig, axes = plt.subplots(1, len(V_VALUES), figsize=(6 * len(V_VALUES), 4.5), sharey=False)
 
@@ -68,10 +68,11 @@ def main(out_dir: Path) -> None:
                 r = protocol.tenor_protocol(
                     result.intensity, result.qx, result.qy, phi2, pxn=PXN,
                     wavelength=WAVELENGTH, observables=("Yg100",),
-                    # Matches the manuscript's stated cubic (3rd-order) G/M fit for
-                    # these Appendix sensitivity figures (main-text/noise-benchmark
-                    # results stay quadratic, the tenor_protocol default).
-                    use_r3=True, use_g3=True,
+                    # CODE-02: fit order is selectable (--fit-order); default 3 matches
+                    # the manuscript's stated cubic G/M fit for these Appendix sensitivity
+                    # figures (main-text/noise-benchmark results stay quadratic, the
+                    # tenor_protocol default).
+                    use_r3=(fit_order == 3), use_g3=(fit_order == 3),
                 )
                 yg100.append(r.observed["Yg100"])
             ax.plot(R0_GRID, yg100, "-o", ms=4, label=name)
@@ -93,5 +94,6 @@ def main(out_dir: Path) -> None:
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--out-dir", type=Path, default=Path(__file__).resolve().parent.parent.parent / "tenor-saxs-v2-data" / "figures")
+    parser.add_argument("--fit-order", type=int, choices=(2, 3), default=3, help="G/M polynomial fit order (2=quadratic, 3=cubic; manuscript default is 3 for this figure)")
     args = parser.parse_args()
-    main(args.out_dir)
+    main(args.out_dir, args.fit_order)
