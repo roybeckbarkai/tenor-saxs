@@ -181,6 +181,185 @@ def discretize_ensemble(
     return x, p
 
 
+def skewed_ensemble(
+    n: int,
+    v_rel: float,
+    skew_x: float,
+    xmin_over_mean: float = 0.1,
+) -> tuple[np.ndarray, np.ndarray]:
+    """N equal-probability Rg values with independently tunable skewness at fixed V ([uri2x-27]).
+
+    Every family in :func:`discretize_ensemble` has whatever skewness its
+    parametric shape happens to produce at the target ``v_rel`` -- there is
+    no way to hold ``V`` fixed and vary skewness alone. This does that, via
+    a Cornish-Fisher quantile expansion: starting from ``n`` equal-probability
+    standard-normal quantiles ``z_k = Phi^-1((k-0.5)/n)``,
+
+        r_k = 1 + sqrt(v_rel) * [ z_k + (skew_x/6)*(z_k**2 - 1) ]
+
+    which to leading order in ``v_rel`` has number-weighted mean 1, relative
+    variance ``v_rel``, and standardized skewness ``skew_x`` (of ``Rg``
+    itself). ``skew_x`` is passed in as the *target standardized skewness of
+    X=Rg**2*, gamma_1(X) = kappa_3(X)/Var(X)**1.5 -- the quantity Appendix B's
+    kappa_3(X)=O(R0^6 V^1.5) is stated in terms of. To leading order in V,
+    gamma_1(X) ~= gamma_1(Rg) (a delta-method expansion of X=Rg**2 near
+    Rg=1 shows the two coincide at the same order this whole formalism
+    already works at -- see uri2x-25/uri2x-27 analysis), so the same
+    ``skew_x`` value is used directly as the Rg-space Cornish-Fisher
+    skewness parameter above.
+
+    Values below ``xmin_over_mean`` (default ``<r>/10``, per the [uri2x-27]
+    spec) are floored there -- this can happen at the low tail for large
+    negative skewness combined with large V. After flooring, the ensemble is
+    affine-rescaled exactly as in :func:`discretize_ensemble` to restore the
+    EXACT target mean and variance; flooring can leave the realized skewness
+    slightly off the target near that corner of the (V, skew_x) grid --
+    check the realized value (e.g. via :func:`scattering_weighted_stats`-style
+    central moments on the returned ``x``, ``p``) rather than assuming exactness
+    there.
+
+    Returns
+    -------
+    x : (n,) representative radii (number-weighted mean=1, number-weighted
+        relative variance=v_rel, approximately-``skew_x``-skewed)
+    p : (n,) number-probabilities, uniform (1/n each)
+    """
+    if v_rel < 0:
+        raise ValueError(f"v_rel must be >= 0, got {v_rel}")
+    mean = 1.0
+    p = np.full(n, 1.0 / n, dtype=float)
+    if v_rel == 0.0:
+        return np.full(n, mean, dtype=float), p
+
+    from scipy.special import ndtri  # standard-normal quantile function
+
+    q = (np.arange(n) + 0.5) / n
+    z = ndtri(q)
+    sd = np.sqrt(v_rel)
+    x = mean + sd * (z + (skew_x / 6.0) * (z**2 - 1.0))
+
+    floor = mean * xmin_over_mean
+    # Clip-then-rescale is not a single fixed point: rescaling to restore the
+    # exact target mean/variance can push the (already-floored) tail back
+    # below the floor, and re-clipping that then perturbs the mean/variance
+    # again. Iterate the pair to convergence (it contracts quickly once most
+    # points are away from the floor) rather than doing one pass of each --
+    # otherwise the floor and the "exact mean/var" guarantee silently fight
+    # each other whenever flooring is active.
+    for _ in range(20):
+        x = np.maximum(x, floor)
+        curr_mu = float(np.mean(x))
+        curr_var = float(np.mean((x - curr_mu) ** 2))
+        if curr_var <= 0:
+            raise RuntimeError(f"Zero realized variance before affine fix (v_rel={v_rel}, skew_x={skew_x})")
+        scale_factor = np.sqrt(v_rel / curr_var)
+        x_new = scale_factor * (x - curr_mu) + mean
+        if np.max(np.abs(x_new - x)) < 1e-13:
+            x = x_new
+            break
+        x = x_new
+    x = np.maximum(x, floor)  # guarantee the floor even if convergence above was loose
+    return x, p
+
+
+def _moments(x: np.ndarray, p: np.ndarray) -> tuple[float, float, float]:
+    """Plain (unweighted-by-anything-else) mean, variance, standardized skewness."""
+    mu = float(np.sum(p * x))
+    var = float(np.sum(p * (x - mu) ** 2))
+    skew = float(np.sum(p * (x - mu) ** 3)) / var**1.5 if var > 0 else float("nan")
+    return mu, var, skew
+
+
+class SkewnessTargetUnreachable(RuntimeError):
+    """Raised when target_skewed_ensemble cannot bracket the target skewness.
+
+    Happens at large ``v_rel`` combined with large ``|target_skew|``, where
+    the ``xmin_over_mean`` floor clips enough of the tail that no Cornish-
+    Fisher input parameter reaches the target (see :func:`skewed_ensemble`).
+    """
+
+
+def target_skewed_ensemble(
+    n: int,
+    v_rel: float,
+    target_skew: float,
+    xmin_over_mean: float = 0.1,
+    tolerance: float = 1e-3,
+    max_iterations: int = 60,
+    input_bound: float = 12.0,
+) -> dict:
+    """Find the :func:`skewed_ensemble` input parameter that REALIZES ``target_skew`` ([uri2x-27]).
+
+    The raw Cornish-Fisher ``skew_x`` input in :func:`skewed_ensemble` is only
+    a leading-order approximation to the realized standardized skewness of
+    the resulting discrete ensemble -- at ``|skew_x|`` of order 1 (not small)
+    the realized skewness systematically undershoots the input by roughly
+    25-30%, and once ``xmin_over_mean`` flooring starts clipping the tail
+    (large ``v_rel`` with large ``|target_skew|``) it undershoots much more.
+    This bisects on the input parameter so the *realized* skewness (computed
+    directly from the returned ``x``, ``p``) matches ``target_skew``.
+
+    Returns a dict with keys ``target_skew``, ``realized_skew``, ``skew_x_input``,
+    ``x``, ``p``, ``mean``, ``var``, ``floored`` (whether the floor bound was
+    active for the returned ensemble). Raises :class:`SkewnessTargetUnreachable`
+    if no ``skew_x_input`` in ``[-input_bound, input_bound]`` brackets the
+    target (report the best-achievable ensemble instead of silently
+    returning something that doesn't match, mirroring
+    :class:`VarianceTargetUnreachable`'s philosophy).
+    """
+    if v_rel == 0.0:
+        x, p = skewed_ensemble(n, v_rel, 0.0, xmin_over_mean)
+        mu, var, realized = _moments(x, p)
+        return {
+            "target_skew": target_skew, "realized_skew": realized, "skew_x_input": 0.0,
+            "x": x, "p": p, "mean": mu, "var": var,
+            "floored": bool(np.any(x <= mu * xmin_over_mean * (1 + 1e-9))),
+        }
+
+    def realized_at(skew_x_input: float) -> float:
+        x, p = skewed_ensemble(n, v_rel, skew_x_input, xmin_over_mean)
+        return _moments(x, p)[2]
+
+    lo, hi = -input_bound, input_bound
+    r_lo, r_hi = realized_at(lo), realized_at(hi)
+    # realized(.) is increasing in skew_x_input; clamp to whichever side is achievable.
+    if target_skew <= r_lo or target_skew >= r_hi:
+        skew_x_input = lo if target_skew <= r_lo else hi
+        x, p = skewed_ensemble(n, v_rel, skew_x_input, xmin_over_mean)
+        mu, var, realized = _moments(x, p)
+        result = {
+            "target_skew": target_skew, "realized_skew": realized, "skew_x_input": skew_x_input,
+            "x": x, "p": p, "mean": mu, "var": var,
+            "floored": bool(np.any(x <= mu * xmin_over_mean * (1 + 1e-9))),
+        }
+        raise SkewnessTargetUnreachable(
+            f"target_skew={target_skew} unreachable at v_rel={v_rel} within "
+            f"skew_x_input in [{lo},{hi}] (achievable range [{r_lo:.4f},{r_hi:.4f}]); "
+            f"closest achieved: {result!r}"
+        )
+
+    for _ in range(max_iterations):
+        mid = 0.5 * (lo + hi)
+        r_mid = realized_at(mid)
+        if abs(r_mid - target_skew) <= tolerance:
+            lo = hi = mid
+            break
+        if r_mid < target_skew:
+            lo = mid
+        else:
+            hi = mid
+
+    skew_x_input = 0.5 * (lo + hi)
+    x, p = skewed_ensemble(n, v_rel, skew_x_input, xmin_over_mean)
+    mu, var, realized = _moments(x, p)
+    return {
+        "target_skew": target_skew, "realized_skew": realized, "skew_x_input": skew_x_input,
+        "x": x, "p": p, "mean": mu, "var": var,
+        "floored": bool(np.any(x <= mu * xmin_over_mean * (1 + 1e-9))),
+    }
+
+
+
 def scattering_weighted_stats(x: np.ndarray, p: np.ndarray, weight_power: float) -> tuple[float, float, float]:
     """Scattering-weighted (mean, relative variance, RMS) of a discretized ensemble.
 

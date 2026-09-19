@@ -49,7 +49,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from .distributions import discretize_ensemble
+from .distributions import discretize_ensemble, skewed_ensemble
 from .formfactors import EXACT_LOG_FORM_FACTORS, GUINIER_TABLE, weight_power_for_name
 from .psf import smear
 
@@ -137,6 +137,7 @@ def scatter2d(
     n_radii: int = 11,
     weight_power: float = 0.0,
     rng: np.random.Generator | None = None,
+    skew_x: float = 0.0,
 ) -> ScatterResult:
     """Simulate a 2D SAXS detector image for a polydisperse ensemble.
 
@@ -194,7 +195,11 @@ def scatter2d(
     effective_weight_power = weight_power_for_name(matched_name) if matched_name is not None else weight_power
 
     # --- discretize the ensemble once, with the effective weight power (Scatter2D.m:128) ---
-    x, p = discretize_ensemble(n_radii, v_rel, dist_type, threshold=0.995, weight_power=effective_weight_power)
+    if dist_type.lower() == "skewed":
+        # [uri2x-27]: independently-tunable-skewness ensemble at fixed v_rel.
+        x, p = skewed_ensemble(n_radii, v_rel, skew_x)
+    else:
+        x, p = discretize_ensemble(n_radii, v_rel, dist_type, threshold=0.995, weight_power=effective_weight_power)
 
     # --- accumulate the scattering-weighted intensity over ensemble members (Scatter2D.m:137-231) ---
     qvr4 = qvr2**2
