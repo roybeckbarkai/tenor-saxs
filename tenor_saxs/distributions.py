@@ -107,8 +107,21 @@ def discretize_ensemble(
     Note: the returned ``p`` is NOT scattering-weighted -- multiply by
     ``x**weight_power`` (and renormalize) to get the scattering-weighted
     ensemble, exactly as ``Scatter2D`` does when building the intensity map.
+
+    ``dist_type='fixman'`` is a special case: the Fixman (1962) distribution
+    of Rg over the conformations of a single ideal (Gaussian/theta) chain is
+    parameter-free (``v_rel`` is not tunable -- see ``fixman.py`` -- and is
+    ignored here), so this returns ``n`` deterministic equal-probability
+    quantile points of the *exact* distribution (``fixman.ensemble_rg``)
+    rather than an importance-sampled/rescaled discretization.
     """
     mean = 1.0
+    if dist_type.lower() == "fixman":
+        from . import fixman as _fixman
+
+        x = _fixman.ensemble_rg(n, rg_mean=mean)
+        p = np.full(n, 1.0 / n, dtype=float)
+        return x, p
     if v_rel < 0:
         raise ValueError(f"v_rel must be >= 0, got {v_rel}")
     if v_rel == 0.0:

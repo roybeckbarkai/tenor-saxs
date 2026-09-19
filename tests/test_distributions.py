@@ -70,3 +70,23 @@ def test_discretize_ensemble_exponential_raises_value_error():
 def test_discretize_ensemble_negative_v_rel_raises():
     with pytest.raises(ValueError):
         discretize_ensemble(11, -0.01, dist_type="normal")
+
+
+def test_discretize_ensemble_fixman_ignores_v_rel_and_matches_true_moments():
+    """dist_type='fixman' is parameter-free: v_rel is ignored, and the
+    returned ensemble's exact moments should match the published Fixman
+    (1962) values (mean=1, V=0.0618396) as n grows, since it uses exact
+    quantiles of the true distribution rather than an importance-
+    sampled/rescaled discretization.
+    """
+    from tenor_saxs.fixman import MOMENTS
+
+    for v_rel in (0.02, 0.15, 999.0):  # arbitrary, must not affect the result
+        x, p = discretize_ensemble(2000, v_rel, dist_type="fixman")
+        assert p.sum() == pytest.approx(1.0, abs=1e-12)
+        np.testing.assert_allclose(p, np.full(2000, 1.0 / 2000))
+
+        mu = float(np.sum(p * x))
+        var = float(np.sum(p * (x - mu) ** 2))
+        assert mu == pytest.approx(1.0, abs=1e-3)
+        assert var == pytest.approx(MOMENTS["V"], abs=2e-3)
