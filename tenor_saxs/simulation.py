@@ -49,6 +49,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
+from .bimodal_skewed import bimodal_skewed_discrete
 from .distributions import discretize_ensemble, skewed_ensemble
 from .formfactors import EXACT_LOG_FORM_FACTORS, GUINIER_TABLE, weight_power_for_name
 from .psf import smear
@@ -138,6 +139,9 @@ def scatter2d(
     weight_power: float = 0.0,
     rng: np.random.Generator | None = None,
     skew_x: float = 0.0,
+    gamma: float = 0.0,
+    bimodal_min_radius: float = 0.5,
+    bimodal_min_probability: float = 0.0,
 ) -> ScatterResult:
     """Simulate a 2D SAXS detector image for a polydisperse ensemble.
 
@@ -198,6 +202,15 @@ def scatter2d(
     if dist_type.lower() == "skewed":
         # [uri2x-27]: independently-tunable-skewness ensemble at fixed v_rel.
         x, p = skewed_ensemble(n_radii, v_rel, skew_x)
+    elif dist_type.lower() == "bimodal_skewed":
+        # [uri2x-30]: exact two-point distribution targeting the
+        # SCATTERING-weighted (mean, V, gamma) directly -- not the
+        # number-weighted ones skewed_ensemble() targets. n_radii is
+        # ignored (always exactly 2 points).
+        x, p, _bimodal_info = bimodal_skewed_discrete(
+            v_rel, gamma, effective_weight_power,
+            min_radius=bimodal_min_radius, min_probability=bimodal_min_probability,
+        )
     else:
         x, p = discretize_ensemble(n_radii, v_rel, dist_type, threshold=0.995, weight_power=effective_weight_power)
 
