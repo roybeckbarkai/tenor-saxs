@@ -76,6 +76,14 @@ tests/            pytest suite
   `tenor_protocol(..., calibration_override=...)`).
 - `benchmark.py` — clean-database caching + noise-sweep benchmark harness.
 - `plotting.py` — violin-plot discrepancy visualization.
+- `fixman.py` — the Fixman (1962) distribution of Rg over the conformations
+  of a single ideal (Gaussian/theta) chain, the random-coil reference
+  ensemble for an IDP; parameter-free (true V≈0.0618). Selectable via
+  `dist_type="fixman"`.
+- `bimodal_skewed.py` — an exact two-point distribution with a prescribed
+  *scattering*-weighted (mean, V, skewness γ), a closed-form alternative to
+  `distributions.skewed_ensemble`'s number-weighted targeting. Selectable
+  via `dist_type="bimodal_skewed"` (+ `gamma=`).
 
 ### `matlab/` — reference implementation
 
@@ -100,6 +108,11 @@ generate the numeric reference data this port was validated against.
   (recovered variance/radius-of-gyration discrepancy vs. photon flux).
 - `reproduce_calibration_vs_analytic.py` — the simulated-calibration-vs-
   analytic inversion comparison for Yg210/Ym210.
+- `fixman_recovery_test.py` — recovers the Fixman distribution's known true
+  `sqrt(V)=0.24868` from simulated data, noiseless and under photon noise.
+- `skewness_sensitivity.py` — sweeps 5 form factors across V and
+  independently-tunable skewness (`dist_type="skewed"`) to show where the
+  method's weak distribution-shape dependence starts to break down.
 
 ## Validation summary
 
@@ -118,7 +131,7 @@ Octave) and, separately, against a real MATLAB benchmark run:
   `calibration.py`) independently confirms the manuscript's claimed bias
   reduction over the analytic inversion, and covers V values the analytic
   route cannot invert at all.
-- 101/101 unit and parity tests pass.
+- 177/177 unit and parity tests pass.
 
 ## Reproducing the paper's figures
 
