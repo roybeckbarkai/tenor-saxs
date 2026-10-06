@@ -18,7 +18,8 @@ MATLAB reference implementation (`matlab/`), validated against both
 directly (see the "Validation summary" section below).
 
 **Try it interactively, no install required:**
-[Open the demo notebook in Google Colab](https://colab.research.google.com/drive/1JyB62BvTwV7SjoPmVrqMNHJUzpvn9Hoj?usp=sharing)
+[Open the demo notebook in Google Colab](https://colab.research.google.com/github/roybeckbarkai/tenor-saxs/blob/main/TENOR_SAXS_demo.ipynb)
+(opens directly from this repo's `main` branch, so it's always current — no manual re-sync needed after future edits)
 
 ## Install
 
