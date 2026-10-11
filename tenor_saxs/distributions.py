@@ -435,7 +435,9 @@ def target_effective_distribution(
 
     Returns a dict with keys: target_v, realized_v, p_numerical,
     input_variance, requested_rg, target_observed_rg, predicted_observed_rg,
-    weighted_rms_factor, x, p (the reweighted, scattering-weighted p).
+    realized_mean_rg (the ensemble's true scattering-weighted MEAN radius --
+    use this, not requested_rg, when comparing against "R0"), weighted_rms_factor,
+    x, p (the reweighted, scattering-weighted p).
     """
 
     def trial(pn: float) -> dict:
@@ -505,6 +507,15 @@ def target_effective_distribution(
         "requested_rg": requested_rg,
         "target_observed_rg": target_observed_rg,
         "predicted_observed_rg": requested_rg * best["rms"],
+        # The ensemble's actual realized scattering-weighted MEAN radius (R0 in the
+        # paper's sense), i.e. requested_rg * mu(x). NOT equal to requested_rg itself
+        # unless the dimensionless shape's weighted mean mu happens to be exactly 1 --
+        # empirically it is NOT: mu drifts from ~1.0 at low V/weight_power up to ~3x at
+        # high weight_power (solid sphere, weight_power=6) and high V. Callers that want
+        # "the true R0 this case realized" (e.g. for an Rg/R0-discrepancy comparison)
+        # must use this field, not requested_rg or predicted_observed_rg (which is the
+        # realized scattering-weighted RMS/apparent radius, R0*sqrt(1+V), not R0 itself).
+        "realized_mean_rg": requested_rg * best["mu"],
         "weighted_rms_factor": best["rms"],
         "x": best["x"],
         "p": best["p"],

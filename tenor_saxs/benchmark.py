@@ -283,8 +283,13 @@ def generate_clean_database(
         zero (matching MATLAB's zero-preallocated, never-overwritten slots).
     manifest : pd.DataFrame
         One row per case with columns ``CaseID, True_V, Phi2, RequestedRg,
-        InputVariance, RealizedV, PredictedObservedRg, WeightedRmsFactor,
-        Status, Error`` (plus ``True_p``/``PNumerical`` bonus columns).
+        InputVariance, RealizedV, PredictedObservedRg, RealizedMeanRg,
+        WeightedRmsFactor, Status, Error`` (plus ``True_p``/``PNumerical``
+        bonus columns). ``RealizedMeanRg`` is the case's true scattering-
+        weighted MEAN radius (R0) -- use this, not ``RequestedRg`` (a scale
+        factor that only coincides with R0 when the dimensionless shape's
+        weighted mean happens to be 1, which is not guaranteed, especially
+        at high ``weight_power``/``True_V``), for any R0 comparison.
 
     Raises
     ------
@@ -350,6 +355,7 @@ def generate_clean_database(
                 InputVariance=float(target["input_variance"]),
                 RealizedV=float(target["realized_v"]),
                 PredictedObservedRg=float(target["predicted_observed_rg"]),
+                RealizedMeanRg=float(target["realized_mean_rg"]),
                 WeightedRmsFactor=float(target["weighted_rms_factor"]),
                 PNumerical=float(target["p_numerical"]),
             )
@@ -361,6 +367,7 @@ def generate_clean_database(
                 InputVariance=np.nan,
                 RealizedV=np.nan,
                 PredictedObservedRg=np.nan,
+                RealizedMeanRg=np.nan,
                 WeightedRmsFactor=np.nan,
                 PNumerical=np.nan,
             )
@@ -381,6 +388,7 @@ def generate_clean_database(
         "InputVariance",
         "RealizedV",
         "PredictedObservedRg",
+        "RealizedMeanRg",
         "WeightedRmsFactor",
         "Status",
         "Error",
@@ -584,13 +592,17 @@ def run_noise_benchmark(
         # this port is the realized/predicted observed Rg from the target
         # search rather than the nominal input config.rg).
         true_rg = float(row.PredictedObservedRg)
-        # RequestedRg is the true SCATTERING-WEIGHTED mean radius the target
-        # search aimed for -- what RgCorrected estimates. True_Rg (above) is
-        # the APPARENT (Guinier) radius, biased upward by polydispersity and
-        # fixed by construction for this case; the two coincide only at
-        # V=0. True_R0 is what the corrected-radius discrepancy (Rg
-        # violin) should be compared against, not True_Rg.
-        true_r0 = float(row.RequestedRg)
+        # RealizedMeanRg is the ensemble's true SCATTERING-WEIGHTED MEAN radius --
+        # what RgCorrected estimates. True_Rg (above) is the APPARENT (Guinier)
+        # radius, biased upward by polydispersity and fixed by construction for
+        # this case; the two coincide only at V=0. True_R0 is what the corrected-
+        # radius discrepancy (Rg violin) should be compared against, not True_Rg.
+        # NOTE: this used to read row.RequestedRg (a scale factor fed into the
+        # simulator, NOT the realized mean -- the two only coincide when the
+        # dimensionless ensemble's weighted mean happens to equal 1, which does
+        # NOT generally hold, especially at high weight_power/True_V, where it
+        # drifted up to ~3x in testing). Fixed to use RealizedMeanRg instead.
+        true_r0 = float(row.RealizedMeanRg)
         phi2_case = float(row.Phi2)
 
         for j, peak_photons in enumerate(config.peak_photons, start=1):
