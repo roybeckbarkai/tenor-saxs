@@ -84,7 +84,7 @@ def exact_log_solid_sphere(q: np.ndarray, rg: float) -> np.ndarray:
     x = np.asarray(q, dtype=float) * rg * gf
     with np.errstate(divide="ignore", invalid="ignore"):
         amp = 3.0 * (np.sin(x) - x * np.cos(x)) / x**3
-    out = np.log(amp**2)
+        out = np.log(amp**2)
     out = np.where(np.abs(x) <= np.finfo(float).eps, 0.0, out)
     return np.where(np.isfinite(out), out, -np.inf)
 
@@ -98,7 +98,7 @@ def exact_log_spherical_shell(q: np.ndarray, rg: float) -> np.ndarray:
     x = np.asarray(q, dtype=float) * rg
     with np.errstate(divide="ignore", invalid="ignore"):
         amp = np.sin(x) / x
-    out = np.log(amp**2)
+        out = np.log(amp**2)
     out = np.where(np.abs(x) <= np.finfo(float).eps, 0.0, out)
     return np.where(np.isfinite(out), out, -np.inf)
 
@@ -113,7 +113,7 @@ def exact_log_gaussian_chain(q: np.ndarray, rg: float) -> np.ndarray:
     q2 = x**2
     with np.errstate(divide="ignore", invalid="ignore"):
         amp = 2.0 * (np.exp(-q2) + q2 - 1.0) / q2**2
-    out = np.log(amp)
+        out = np.log(amp)
     out = np.where(np.abs(x) <= np.finfo(float).eps, 0.0, out)
     return np.where(np.isfinite(out), out, -np.inf)
 
@@ -132,7 +132,7 @@ def exact_log_thin_rod(q: np.ndarray, rg: float) -> np.ndarray:
     si, _ci = sici(u)
     with np.errstate(divide="ignore", invalid="ignore"):
         amp = 2.0 * si / u - 4.0 * np.sin(u / 2.0) ** 2 / u**2
-    out = np.log(amp)
+        out = np.log(amp)
     out = np.where(np.abs(u) <= np.finfo(float).eps, 0.0, out)
     return np.where(np.isfinite(out), out, -np.inf)
 
@@ -147,7 +147,7 @@ def exact_log_thin_disk(q: np.ndarray, rg: float) -> np.ndarray:
     u = np.asarray(q, dtype=float) * rg * gf
     with np.errstate(divide="ignore", invalid="ignore"):
         amp = 2.0 / u**2 * (1.0 - jv(1, 2.0 * u) / u)
-    out = np.log(amp)
+        out = np.log(amp)
     out = np.where(np.abs(u) <= np.finfo(float).eps, 0.0, out)
     return np.where(np.isfinite(out), out, -np.inf)
 

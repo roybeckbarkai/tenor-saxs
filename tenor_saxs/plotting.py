@@ -154,6 +154,7 @@ def _draw_violin_panel(
     value_fn,
     ylabel: str,
     rng: np.random.Generator,
+    xlabel: str | None = None,
 ) -> matplotlib.axes.Axes:
     """Shared drawing logic for one discrepancy panel across noise levels.
 
@@ -242,7 +243,7 @@ def _draw_violin_panel(
     ax.set_xticks(positions)
     ax.xaxis.set_major_formatter(matplotlib.ticker.FixedFormatter([f"{n:.3g}" for n in noise_levels]))
     ax.xaxis.set_minor_locator(matplotlib.ticker.NullLocator())
-    ax.set_xlabel(_x_axis_label(results_df))
+    ax.set_xlabel(xlabel if xlabel is not None else _x_axis_label(results_df))
     ax.set_ylabel(ylabel)
     ax.grid(True, alpha=0.3)
     return ax
@@ -363,6 +364,7 @@ def plot_tenor_benchmark_violins(
     results_df: pd.DataFrame,
     rng: np.random.Generator | None = None,
     panels: Sequence[str] = ("V", "p", "Rg"),
+    xlabel: str | None = None,
 ) -> tuple[matplotlib.figure.Figure, Sequence[matplotlib.axes.Axes]]:
     """Multi-panel figure of the requested discrepancy panels.
 
@@ -379,6 +381,10 @@ def plot_tenor_benchmark_violins(
     is unchanged from before this parameter existed (``("V", "p", "Rg")``);
     the manuscript's current pair is ``panels=("V", "R0")``. Raises
     ``ValueError`` on an unknown panel name.
+
+    ``xlabel``, if given, overrides the default x-axis label (which is
+    otherwise derived from ``results_df``'s columns -- see
+    :func:`_x_axis_label``) on every panel.
     """
     unknown = [p for p in panels if p not in _PANEL_SPECS]
     if unknown:
@@ -392,7 +398,7 @@ def plot_tenor_benchmark_violins(
     axes = axes[0]
     for ax, name in zip(axes, panels):
         value_fn, ylabel, title, zero_line = _PANEL_SPECS[name]
-        _draw_violin_panel(ax, results_df, value_fn, ylabel, rng)
+        _draw_violin_panel(ax, results_df, value_fn, ylabel, rng, xlabel=xlabel)
         if zero_line:
             ax.axhline(0.0, color="k", linestyle="--", linewidth=1.2)
         ax.set_title(title)
